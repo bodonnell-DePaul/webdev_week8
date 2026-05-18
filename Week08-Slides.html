@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Week 8 — Real-Time Web Communication & PWAs</title>
+
+  <!-- Reveal.js from CDN: self-contained slide deck, no build step required -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reset.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/black.css" id="theme" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/monokai.css" />
+
+  <style>
+    .reveal h1, .reveal h2, .reveal h3 { color: #5dd9ff; text-transform: none; }
+    .reveal h1 { font-size: 2.2em; }
+    .reveal h2 { font-size: 1.6em; }
+    .reveal h3 { font-size: 1.1em; color: #ffd166; }
+    .reveal pre { font-size: 0.55em; }
+    .reveal table { font-size: 0.55em; margin: 0 auto; }
+    .reveal th { background: #1a3a4a; color: #fff; }
+    .reveal section ul { font-size: 0.85em; }
+    .reveal section.small ul { font-size: 0.7em; }
+    .pros { color: #6eea9b; }
+    .cons { color: #ff7474; }
+    .tag { display: inline-block; background: #1e6091; color: #fff; padding: 2px 10px; border-radius: 12px; font-size: 0.5em; margin: 0 4px; vertical-align: middle; }
+    .legend { font-size: 0.5em; color: #aaa; margin-top: 1em; }
+    .twocol { display: flex; gap: 2em; }
+    .twocol > div { flex: 1; }
+    .footer { position: absolute; bottom: 4px; right: 12px; font-size: 12px; color: #666; }
+  </style>
+</head>
+<body>
+  <div class="reveal">
+    <div class="slides">
+
+      <!-- TITLE -->
+      <section>
+        <h1>Real-Time Web Communication & PWAs</h1>
+        <h3>Web Development — Week 8</h3>
+        <p>Polling · HTTP Streaming · SSE · WebSockets · SignalR · WebRTC · Service Workers · Web Push · PWA</p>
+        <p class="legend">Cross-referenced with GPT-5.5 (high). ~3-hour lecture.</p>
+      </section>
+
+      <!-- PART 0: FRAMING -->
+      <section>
+        <section>
+          <h2>1. Why "real-time" matters</h2>
+          <ul>
+            <li>The web started as a <em>pull</em> medium. Modern users expect <em>push</em>.</li>
+            <li>Chat, AI typing, dashboards, video, multiplayer — all the same question:</li>
+            <li><strong>Who pushes data? When? Over which wire?</strong></li>
+            <li>There is no "best" tech — only the right shape for the problem.</li>
+          </ul>
+        </section>
+        <section>
+          <h2>2. Pick the communication model <em>first</em></h2>
+          <ul>
+            <li><strong>Direction</strong> — S→C, C→S, both, peer↔peer?</li>
+            <li><strong>Latency budget</strong> — ms, sec, "eventually"?</li>
+            <li><strong>Fan-out</strong> — 1:1, 1:many, many:many?</li>
+            <li><strong>Reliability</strong> — must every message arrive in order?</li>
+            <li><strong>Lifecycle</strong> — short request, persistent, or background?</li>
+          </ul>
+          <p class="legend">Decide the <em>model</em> before you reach for an API.</p>
+        </section>
+      </section>
+
+      <!-- HTTP -->
+      <section>
+        <section>
+          <h2>3. HTTP Baseline</h2>
+          <ul>
+            <li>Stateless, client-initiated, request → response.</li>
+            <li>Half-duplex per request.</li>
+            <li>Friendly to CDNs, caches, proxies.</li>
+            <li>Every real-time tech either bends, replaces, or bypasses HTTP.</li>
+          </ul>
+        </section>
+        <section>
+          <h2>HTTP — when it's still right</h2>
+          <ul>
+            <li>CRUD, REST, GraphQL queries/mutations.</li>
+            <li>User-initiated reads / form submits.</li>
+            <li>Latency budgets measured in seconds, not milliseconds.</li>
+          </ul>
+        </section>
+      </section>
+
+      <!-- POLLING -->
+      <section>
+        <section>
+          <h2>4. HTTP Polling</h2>
+          <h3>Short polling: ask every N seconds</h3>
+          <pre><code>Client ──GET /updates──► Server (every 5s)
+Client ──GET /updates──► Server</code></pre>
+          <p class="pros">+ Trivial, stateless, universal.</p>
+          <p class="cons">– Wasted requests; latency = poll interval.</p>
+        </section>
+        <section>
+          <h2>4. Long Polling</h2>
+          <pre><code>Client ──GET /updates──► Server (holds…)
+                          ↓ data arrives
+Client ◄────payload───── Server
+Client ──GET /updates──► Server (immediately reconnects)</code></pre>
+          <p class="pros">+ Near real-time, HTTP-friendly, survives proxies.</p>
+          <p class="cons">– Many idle open sockets; one message per round-trip.</p>
+        </section>
+        <section>
+          <h2>Polling — use cases</h2>
+          <ul>
+            <li>"Is my batch job done?" status checks.</li>
+            <li>Low-frequency dashboards (≥ 30s tick).</li>
+            <li>Hostile-network fallback (still hidden inside SignalR).</li>
+          </ul>
+        </section>
+      </section>
+
+      <!-- HTTP STREAMING -->
+      <section>
+        <section>
+          <h2>5. HTTP Streaming</h2>
+          <p>One long response, body delivered in chunks.</p>
+          <pre><code>Client ──POST /chat──► Server
+        ◄──chunk 1── (token 1)
+        ◄──chunk 2── (token 2)
+        ◄──chunk 3── (token 3)
+        ◄──────────  end</code></pre>
+          <p class="legend">This is how ChatGPT-style "typing" UIs work.</p>
+        </section>
+        <section>
+          <h2>HTTP Streaming — capabilities</h2>
+          <p class="pros">+ Client can POST <em>and</em> stream back.</p>
+          <p class="pros">+ Binary-safe, no new protocol.</p>
+          <p class="pros">+ Works with auth headers, middleware, CDN.</p>
+          <p class="cons">– No automatic reconnect (you write it).</p>
+          <p class="cons">– No standard framing — agree on a format (NDJSON, etc.).</p>
+          <p class="cons">– One-way, like SSE.</p>
+        </section>
+      </section>
+
+      <!-- SSE -->
+      <section>
+        <section>
+          <h2>6. Server-Sent Events (SSE)</h2>
+          <p>Standardized server→client streaming over HTTP. <code>text/event-stream</code> + browser <code>EventSource</code>.</p>
+          <pre><code>Client ──GET /stream──► Server
+       ◄── data: {…}
+       ◄── event: update
+           data: {…}
+       (one persistent response, browser auto-reconnects)</code></pre>
+        </section>
+        <section>
+          <h2>SSE — pros</h2>
+          <ul class="pros">
+            <li>Simplest persistent server→client channel.</li>
+            <li>Built-in reconnection & <code>Last-Event-ID</code> resume.</li>
+            <li>Plays with every HTTP intermediary.</li>
+            <li>Ideal for LLM token streaming, dashboards, feeds.</li>
+          </ul>
+        </section>
+        <section>
+          <h2>SSE — cons</h2>
+          <ul class="cons">
+            <li>One-way only. Send back? Make a separate request.</li>
+            <li>Text/UTF-8 only.</li>
+            <li><strong>EventSource cannot send custom headers</strong> (no <code>Authorization</code>) — use cookies, short-lived tokens, or <code>fetch-event-source</code>.</li>
+            <li>Long-lived sockets cost memory and file descriptors.</li>
+          </ul>
+        </section>
+        <section>
+          <h2>SSE — use cases</h2>
+          <ul>
+            <li>AI/LLM token streaming.</li>
+            <li>Stock tickers, sensor data, build pipelines.</li>
+            <li>Live sports/election feeds, news, comments.</li>
+            <li>Log tailing in DevOps dashboards.</li>
+          </ul>
+        </section>
+      </section>
+
+      <!-- WEBSOCKETS -->
+      <section>
+        <section>
+          <h2>7. WebSockets</h2>
+          <p>RFC 6455 — upgrade HTTP → persistent, full-duplex TCP channel.</p>
+          <pre><code>Client                       Server
+  ──── GET /ws  Upgrade ────►
+  ◄── 101 Switching Protocols ──
+  ═══ framed text/binary  ═══►
+  ◄═══ framed text/binary  ═══</code></pre>
+        </section>
+        <section>
+          <h2>WebSockets — capabilities</h2>
+          <ul>
+            <li>True bidirectional, low-latency messaging.</li>
+            <li>Text or binary payloads, optional per-message compression.</li>
+            <li>Subprotocols (graphql-ws, mqtt, custom).</li>
+            <li>Browser-native everywhere.</li>
+          </ul>
+        </section>
+        <section>
+          <h2>WebSockets — pros vs cons</h2>
+          <div class="twocol">
+            <div>
+              <h3>Pros</h3>
+              <ul class="pros">
+                <li>Lowest-overhead bidirectional channel.</li>
+                <li>Symmetrical: either side can speak.</li>
+                <li>Predictable latency.</li>
+                <li>Ecosystem in every language.</li>
+              </ul>
+            </div>
+            <div>
+              <h3>Cons</h3>
+              <ul class="cons">
+                <li>You own the lifecycle.</li>
+                <li>Sticky sessions + backplane to scale.</li>
+                <li>Proxy hostility — need pings.</li>
+                <li>No HTTP semantics after upgrade.</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+        <section>
+          <h2>WebSockets — use cases</h2>
+          <ul>
+            <li>Chat & collaboration (Slack, Teams, Discord).</li>
+            <li>Real-time collaborative editing (Google Docs, Figma).</li>
+            <li>Multiplayer games & low-latency state sync.</li>
+            <li>Trading dashboards & live auctions.</li>
+            <li>IoT control plane (often via MQTT subprotocol).</li>
+          </ul>
+        </section>
+      </section>
+
+      <!-- SIGNALR -->
+      <section>
+        <section>
+          <h2>8. SignalR</h2>
+          <p>Microsoft's high-level real-time library for ASP.NET Core.</p>
+          <p>Negotiates transport (WS → SSE → Long Polling) behind a <strong>Hub</strong> programming model.</p>
+        </section>
+        <section>
+          <h2>SignalR — what you get for free</h2>
+          <ul>
+            <li>Bidirectional RPC-style method calls.</li>
+            <li>Transparent transport fallback.</li>
+            <li>Groups, users, connection targeting.</li>
+            <li>Automatic reconnection.</li>
+            <li>ASP.NET Core auth integration.</li>
+            <li>Managed scale-out (Azure SignalR Service).</li>
+          </ul>
+        </section>
+        <section>
+          <h2>SignalR — pros vs cons</h2>
+          <div class="twocol">
+            <div>
+              <h3>Pros</h3>
+              <ul class="pros">
+                <li>Huge productivity win on .NET.</li>
+                <li>Group targeting without a registry.</li>
+                <li>Built-in fallback + reconnection.</li>
+                <li>Clean cloud upgrade path.</li>
+              </ul>
+            </div>
+            <div>
+              <h3>Cons</h3>
+              <ul class="cons">
+                <li>Framework lock-in.</li>
+                <li>JSON default — switch to MessagePack at scale.</li>
+                <li>Silent long-polling fallback hides bugs.</li>
+                <li>Negotiation endpoint is a hotspot.</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+        <section>
+          <h2>SignalR — use cases</h2>
+          <ul>
+            <li>Enterprise chat / collaboration on .NET.</li>
+            <li>Live ops/finance/support dashboards.</li>
+            <li>In-app real-time notifications.</li>
+            <li>Auctions, ticketing, order flow.</li>
+            <li>AI token streaming to .NET clients.</li>
+            <li>Signaling channel for WebRTC (next!).</li>
+          </ul>
+        </section>
+      </section>
+
+      <!-- WEBRTC -->
+      <section>
+        <section>
+          <h2>9. WebRTC</h2>
+          <p>Peer-to-peer, low-latency audio, video, and data — directly between browsers.</p>
+          <pre><code>Browser A ◄── Signaling Server ──► Browser B
+              (SDP, ICE via WS / SignalR)
+       │                                  │
+       └──── Direct P2P (SRTP/DTLS) ──────┘</code></pre>
+        </section>
+        <section>
+          <h2>WebRTC — pillars</h2>
+          <ul>
+            <li><strong>MediaStream</strong> — mic, camera, screen capture.</li>
+            <li><strong>RTCPeerConnection</strong> — codecs, NAT, encryption, transport.</li>
+            <li><strong>RTCDataChannel</strong> — arbitrary data (text, JSON, binary).</li>
+            <li><strong>Signaling</strong> — <em>your</em> responsibility (WebSockets/SignalR).</li>
+          </ul>
+        </section>
+        <section>
+          <h2>WebRTC — infrastructure</h2>
+          <ul>
+            <li><strong>STUN</strong> — discover public IP behind NAT.</li>
+            <li><strong>TURN</strong> — relay when peers can't connect (10–25% of sessions). <em>Plan for it.</em></li>
+            <li><strong>SFU</strong> — forward streams beyond ~4–6 peers.</li>
+            <li><strong>MCU</strong> — mix/transcode for very large rooms.</li>
+          </ul>
+          <p class="legend">"Works on my LAN with just STUN" is a trap. Always test TURN.</p>
+        </section>
+        <section>
+          <h2>WebRTC — pros vs cons</h2>
+          <div class="twocol">
+            <div>
+              <h3>Pros</h3>
+              <ul class="pros">
+                <li>Sub-100ms latency A/V.</li>
+                <li>P2P saves bandwidth + reduces latency.</li>
+                <li>Mandatory encryption.</li>
+                <li>Massive ecosystem.</li>
+              </ul>
+            </div>
+            <div>
+              <h3>Cons</h3>
+              <ul class="cons">
+                <li>Substantial complexity.</li>
+                <li>STUN/TURN/SFU infrastructure.</li>
+                <li>Mesh breaks past 4–6 peers.</li>
+                <li>Hard to observe server-side.</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+        <section>
+          <h2>WebRTC — use cases</h2>
+          <ul>
+            <li>Video calling (Meet, Teams, Jitsi, Whereby).</li>
+            <li>Telehealth & telemedicine.</li>
+            <li>Customer support video + screen share.</li>
+            <li>Browser-native multiplayer games (data channels).</li>
+            <li>P2P file transfer & E2E-encrypted chat.</li>
+            <li>Live AI avatars / sub-second agents.</li>
+          </ul>
+        </section>
+      </section>
+
+      <!-- SERVICE WORKERS -->
+      <section>
+        <section>
+          <h2>10. Service Workers</h2>
+          <p>A JavaScript file the browser runs in its own background thread — a <strong>programmable network proxy</strong> between your app and the network.</p>
+          <ul>
+            <li>No DOM access — separate global.</li>
+            <li>Lifecycle events: <code>install / activate / fetch / push / sync</code>.</li>
+            <li>Foundation for offline, push, install-to-home-screen.</li>
+          </ul>
+        </section>
+        <section>
+          <h2>Service Workers — caching strategies</h2>
+          <table>
+            <tr><th>Strategy</th><th>Behavior</th><th>Best for</th></tr>
+            <tr><td>Cache-first</td><td>Try cache → network</td><td>Static assets</td></tr>
+            <tr><td>Network-first</td><td>Try network → cache</td><td>Fresh API data</td></tr>
+            <tr><td>Stale-while-revalidate</td><td>Serve cache, refresh bg</td><td>Avatars, feeds</td></tr>
+            <tr><td>Cache-only</td><td>Cache, never network</td><td>Truly immutable</td></tr>
+            <tr><td>Network-only</td><td>Skip SW</td><td>Auth, payments</td></tr>
+          </table>
+        </section>
+        <section>
+          <h2>Service Workers — pros & pitfalls</h2>
+          <div class="twocol">
+            <div>
+              <h3 class="pros">Pros</h3>
+              <ul>
+                <li>Foundation for offline / push / install.</li>
+                <li>Massive perf wins on repeat visits.</li>
+                <li>Language-agnostic backend.</li>
+              </ul>
+            </div>
+            <div>
+              <h3 class="cons">Pitfalls</h3>
+              <ul>
+                <li>Cache invalidation is hard.</li>
+                <li>Lifecycle confuses everyone.</li>
+                <li>Buggy SW locks users into old version — keep a "kill switch".</li>
+                <li>HTTPS required (localhost ok in dev).</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <!-- WEB PUSH -->
+      <section>
+        <section>
+          <h2>11. Web Push</h2>
+          <p>Deliver a notification to the user even when the tab is closed. <strong>A doorbell, not a data channel.</strong></p>
+          <pre><code>Server ──VAPID-signed──► Push Service (FCM / Mozilla / Apple)
+                                  │
+                                  ▼
+                       Service Worker `push` event
+                                  │
+                                  ▼
+                       showNotification() → user</code></pre>
+        </section>
+        <section>
+          <h2>Web Push — pros vs cons</h2>
+          <div class="twocol">
+            <div>
+              <h3 class="pros">Pros</h3>
+              <ul>
+                <li>Re-engages without an app store.</li>
+                <li>Uses vendor push infra (no pipeline of your own).</li>
+                <li>Strong opt-in / revocable.</li>
+              </ul>
+            </div>
+            <div>
+              <h3 class="cons">Cons</h3>
+              <ul>
+                <li>Permission friction.</li>
+                <li>iOS needs installed PWA (since 16.4).</li>
+                <li>Not real-time data — best-effort, ~4KB.</li>
+                <li>Easy to abuse → users mute you.</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+        <section>
+          <h2>Web Push — use cases</h2>
+          <ul>
+            <li>Chat / mention notifications while user is away.</li>
+            <li>Calendar / meeting reminders.</li>
+            <li>Order, shipping, ride-share status.</li>
+            <li>Time-sensitive alerts (price drops, breaking news).</li>
+          </ul>
+        </section>
+      </section>
+
+      <!-- PWA -->
+      <section>
+        <section>
+          <h2>12. Progressive Web Apps</h2>
+          <p>A <em>pattern</em>, not a single technology:</p>
+          <ul>
+            <li><strong>Web App Manifest</strong> — name, icons, theme.</li>
+            <li><strong>Service Worker</strong> — proxy, cache, push.</li>
+            <li><strong>HTTPS</strong> — non-negotiable.</li>
+            <li>Responsive UI, install prompt, offline, push, background sync.</li>
+          </ul>
+        </section>
+        <section>
+          <h2>PWA — pros vs cons</h2>
+          <div class="twocol">
+            <div>
+              <h3 class="pros">Pros</h3>
+              <ul>
+                <li>Zero install friction.</li>
+                <li>One codebase, all platforms.</li>
+                <li>Auto updates.</li>
+                <li>Cheap MVP path.</li>
+              </ul>
+            </div>
+            <div>
+              <h3 class="cons">Cons</h3>
+              <ul>
+                <li>iOS lags on some APIs.</li>
+                <li>Storage quotas can be reclaimed.</li>
+                <li>SW lifecycle is a learning curve.</li>
+                <li>Discoverability outside web.</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+        <section>
+          <h2>PWA — examples in the wild</h2>
+          <ul>
+            <li>Twitter Lite, Pinterest, Starbucks, Uber.</li>
+            <li>News & media (offline-on-the-train).</li>
+            <li>Field-service & logistics in poor connectivity.</li>
+            <li>Internal tools that bypass the store.</li>
+            <li>Note-taking, time-tracking, productivity apps.</li>
+          </ul>
+        </section>
+      </section>
+
+      <!-- ADJACENT -->
+      <section>
+        <section>
+          <h2>13. Adjacent technologies</h2>
+          <ul>
+            <li><strong>gRPC streaming</strong> — service-to-service; browser via gRPC-Web.</li>
+            <li><strong>MQTT</strong> — IoT pub/sub; browser via WS bridge.</li>
+            <li><strong>GraphQL subscriptions</strong> — live queries over WS/SSE.</li>
+            <li><strong>WebTransport</strong> — HTTP/3+QUIC; reliable streams + datagrams.</li>
+            <li><strong>Webhooks</strong> — server-to-server "I'll POST you when…".</li>
+            <li><strong>BroadcastChannel / SharedWorker</strong> — same-origin tab coordination.</li>
+          </ul>
+        </section>
+        <section>
+          <h2>13. Do <em>not</em> use</h2>
+          <ul class="cons">
+            <li><strong>HTTP/2 Server Push</strong> — Chrome removed support in 2022. Use HTTP streaming, SSE, or <code>&lt;link rel="preload"&gt;</code> instead.</li>
+          </ul>
+          <p class="legend">If AI-generated code reaches for it, replace.</p>
+        </section>
+      </section>
+
+      <!-- DECISION -->
+      <section>
+        <section>
+          <h2>14. Decision tree</h2>
+          <ul style="font-size: 0.85em;">
+            <li>Anything real-time? <em>No</em> → REST. Stop.</li>
+            <li>Server → client only?
+              <ul>
+                <li>Low freq → polling.</li>
+                <li>High freq / stream → <strong>SSE</strong> (or HTTP streaming for auth POST).</li>
+              </ul>
+            </li>
+            <li>Both directions?
+              <ul>
+                <li>.NET shop / productivity → <strong>SignalR</strong>.</li>
+                <li>Else → <strong>WebSockets</strong>.</li>
+              </ul>
+            </li>
+            <li>Audio / video / sub-100ms? → <strong>WebRTC</strong> + WS/SignalR signaling.</li>
+            <li>Tab closed engagement? → <strong>Web Push + Service Worker</strong>.</li>
+            <li>Installable + offline? → <strong>PWA</strong> on top of any of the above.</li>
+          </ul>
+        </section>
+        <section class="small">
+          <h2>14. Cheat sheet</h2>
+          <table>
+            <tr><th>Tech</th><th>Direction</th><th>Sweet spot</th><th>Avoid for</th></tr>
+            <tr><td>Short polling</td><td>C↔S</td><td>"Is job done?"</td><td>High freq</td></tr>
+            <tr><td>Long polling</td><td>C↔S</td><td>Hostile networks</td><td>Bursty</td></tr>
+            <tr><td>HTTP streaming</td><td>S→C (POST)</td><td>LLM tokens</td><td>Needs reconnect</td></tr>
+            <tr><td>SSE</td><td>S→C</td><td>Dashboards, feeds</td><td>Chat / games</td></tr>
+            <tr><td>WebSockets</td><td>C↔S</td><td>Chat, collab, games</td><td>A/V</td></tr>
+            <tr><td>SignalR</td><td>C↔S</td><td>Real-time on .NET</td><td>Non-.NET</td></tr>
+            <tr><td>WebRTC</td><td>P↔P</td><td>A/V, P2P data</td><td>Simple notifications</td></tr>
+            <tr><td>Web Push</td><td>S→C bg</td><td>Doorbell</td><td>Bulk data</td></tr>
+            <tr><td>PWA</td><td>n/a</td><td>Installable, offline</td><td>Heavy native</td></tr>
+          </table>
+        </section>
+      </section>
+
+      <!-- CROSS-CUTTING -->
+      <section>
+        <section>
+          <h2>15. Cross-cutting concerns</h2>
+          <ul>
+            <li><strong>Scaling</strong> — sticky sessions, backplanes, region locality, backpressure.</li>
+            <li><strong>Security</strong> — TLS, JWT validated on connect <em>and</em> per call, rate limits, input size caps.</li>
+            <li><strong>Observability</strong> — connection counts, p95 latency, reconnect rate, fanout factor, transport mix.</li>
+            <li><strong>Cost</strong> — egress dominates; idle connections aren't free; managed services trade $ for time.</li>
+          </ul>
+        </section>
+      </section>
+
+      <!-- RECAP -->
+      <section>
+        <section>
+          <h2>16. Recap (one paragraph)</h2>
+          <p style="font-size: 0.75em;">
+            Plain HTTP pulls. <strong>Polling</strong> fakes push by asking on a loop. <strong>HTTP streaming</strong> delivers one long response in chunks (today's LLM token UX). <strong>SSE</strong> standardizes that for server→client with auto-reconnect. <strong>WebSockets</strong> turn HTTP into a bidirectional pipe. <strong>SignalR</strong> wraps WS/SSE/long-polling in a productive .NET abstraction. <strong>WebRTC</strong> opens encrypted P2P media and data between browsers. <strong>Service workers</strong> are the programmable network proxy that powers offline and background. <strong>Web Push</strong> rings the user's doorbell when the tab is closed. <strong>PWAs</strong> package it all into installable, offline-capable apps.
+          </p>
+        </section>
+        <section>
+          <h2>Studio lab preview</h2>
+          <ul>
+            <li>One React app, one ASP.NET Core (.NET 10) backend.</li>
+            <li>Every tech in this deck has its own page.</li>
+            <li>EF Core for persistence, JWT for auth, Application Insights for telemetry.</li>
+            <li>Read the comments — every demo is annotated.</li>
+            <li>See <code>sample-app/README.md</code> for run instructions.</li>
+          </ul>
+        </section>
+        <section>
+          <h1>Questions?</h1>
+          <p class="legend">Lecture material derived from <code>webdev_week8</code> and expanded.<br />Cross-referenced with GPT-5.5 (high reasoning).</p>
+        </section>
+      </section>
+
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/highlight.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/notes/notes.js"></script>
+  <script>
+    Reveal.initialize({
+      hash: true,
+      slideNumber: 'c/t',
+      transition: 'slide',
+      plugins: [RevealHighlight, RevealNotes]
+    });
+  </script>
+</body>
+</html>
