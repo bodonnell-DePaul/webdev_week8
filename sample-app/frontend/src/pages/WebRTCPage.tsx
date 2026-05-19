@@ -185,9 +185,13 @@ export default function WebRTCPage() {
     dc.onopen = () => { setDcState('open'); push('data channel open ✓', 'good'); };
     dc.onclose = () => { setDcState('closed'); push('data channel closed', 'muted'); };
     dc.onmessage = (e) => {
-      const size = typeof e.data === 'string' ? e.data.length : (e.data as ArrayBuffer).byteLength;
+      const d: unknown = e.data;
+      let size = 0;
+      if (typeof d === 'string') size = d.length;
+      else if (d instanceof ArrayBuffer) size = d.byteLength;
+      else if (typeof Blob !== 'undefined' && d instanceof Blob) size = d.size;
       setBytes((b) => ({ ...b, in: b.in + size }));
-      setChat((c) => [...c, { from: 'peer', text: String(e.data) }]);
+      setChat((c) => [...c, { from: 'peer', text: String(d) }]);
     };
   }
 
@@ -236,9 +240,12 @@ export default function WebRTCPage() {
           return;
         }
         if (offerCollision) {
-          // Polite peer: roll back local changes so we can accept their offer.
+          // Polite peer rolls back its in-flight local offer so it can accept
+          // the remote offer. The `rollback` description type is part of the
+          // WebRTC perfect-negotiation spec but is missing from lib.dom.d.ts,
+          // hence the cast.
           await Promise.all([
-            pc.setLocalDescription({ type: 'rollback' } as any).catch(() => undefined),
+            pc.setLocalDescription({ type: 'rollback' } as unknown as RTCLocalSessionDescriptionInit).catch(() => undefined),
           ]);
         }
         await pc.setRemoteDescription(payload.sdp);
