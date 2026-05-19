@@ -13,6 +13,7 @@
 // Hub mapping is configured in Program.cs (MapHub<ChatHub>).
 // =============================================================================
 
+using System.Collections.Concurrent;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using RealtimeDemo.Api.Data;
@@ -24,6 +25,11 @@ namespace RealtimeDemo.Api.Hubs;
 [Authorize] // JWT bearer token required (passed via ?access_token=... for WS).
 public class ChatHub : Hub
 {
+    // In-memory presence registry shared across all connections of this hub.
+    // For a single-process demo this is sufficient; a scaled-out deployment
+    // would persist presence in Redis or a similar backplane.
+    private static readonly ConcurrentDictionary<string, string> Presence = new();
+
     private readonly AppDbContext _db;
     private readonly TelemetryService _tele;
     private readonly ILogger<ChatHub> _log;
@@ -40,16 +46,36 @@ public class ChatHub : Hub
     public override async Task OnConnectedAsync()
     {
         _tele.Track("SignalR", "connected", user: Who, detail: Context.ConnectionId);
-        // Tell every client about the new presence.
-        await Clients.All.SendAsync("UserConnected", Who, Context.ConnectionId);
+        Presence[Context.ConnectionId] = Who;
+        // Let the caller know its own connection ID so the WebRTC client can
+        // filter itself out of the peer list and reason about glare.
+        await Clients.Caller.SendAsync("Welcome", Context.ConnectionId);
+        // Tell every *other* client about the new presence.
+        await Clients.Others.SendAsync("UserConnected", Who, Context.ConnectionId);
         await base.OnConnectedAsync();
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
         _tele.Track("SignalR", "disconnected", user: Who, detail: exception?.Message);
-        await Clients.All.SendAsync("UserDisconnected", Who, Context.ConnectionId);
+        Presence.TryRemove(Context.ConnectionId, out _);
+        await Clients.Others.SendAsync("UserDisconnected", Who, Context.ConnectionId);
         await base.OnDisconnectedAsync(exception);
+    }
+
+    /// <summary>
+    /// Returns the currently connected peers (excluding the caller). Used by
+    /// the WebRTC page so a fresh joiner can see users who connected before
+    /// them — `UserConnected` only fires for future arrivals.
+    /// </summary>
+    public Task<IEnumerable<object>> GetPeers()
+    {
+        var me = Context.ConnectionId;
+        var list = Presence
+            .Where(kv => kv.Key != me)
+            .Select(kv => (object)new { id = kv.Key, user = kv.Value })
+            .ToList();
+        return Task.FromResult<IEnumerable<object>>(list);
     }
 
     // ---- Broadcast / persisted chat ---------------------------------------
