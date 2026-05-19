@@ -41,7 +41,7 @@ builder.Services.AddCors(o =>
 // -----------------------------------------------------------------------------
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddOpenApi();
+
 
 // -----------------------------------------------------------------------------
 // SignalR — built-in to ASP.NET Core. JSON protocol is the default; in
@@ -195,7 +195,7 @@ using (var scope = app.Services.CreateScope())
 
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    
 }
 
 app.UseForwardedHeaders();

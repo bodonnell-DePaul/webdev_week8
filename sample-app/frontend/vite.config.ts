@@ -16,10 +16,10 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api':  { target: 'http://127.0.0.1:5080', changeOrigin: true },
+      '/api':  { target: 'http://127.0.0.1:5090', changeOrigin: true },
       // SignalR + WebSocket need ws upgrade forwarded too.
-      '/hubs': { target: 'http://127.0.0.1:5080', changeOrigin: true, ws: true },
-      '/ws':   { target: 'http://127.0.0.1:5080', changeOrigin: true, ws: true },
+      '/hubs': { target: 'http://127.0.0.1:5090', changeOrigin: true, ws: true },
+      '/ws':   { target: 'http://127.0.0.1:5090', changeOrigin: true, ws: true },
     },
   },
   plugins: [

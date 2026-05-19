@@ -1,0 +1,68 @@
+# .gitignore for webdev_week8
+
+# Node/Vite/React frontend
+sample-app/frontend/node_modules/
+sample-app/frontend/dist/
+sample-app/frontend/.vite/
+sample-app/frontend/.env
+sample-app/frontend/.DS_Store
+sample-app/frontend/.pnp*
+sample-app/frontend/.yarn*
+sample-app/frontend/.eslintcache
+
+# .NET/ASP.NET backend
+sample-app/backend/**/*.vs/
+sample-app/backend/**/*.vscode/
+sample-app/backend/**/*.user
+sample-app/backend/**/*.suo
+sample-app/backend/**/*.userosscache
+sample-app/backend/**/*.sln.docstates
+sample-app/backend/**/*.db
+sample-app/backend/**/*.db-shm
+sample-app/backend/**/*.db-wal
+sample-app/backend/**/*.sqlite
+sample-app/backend/**/*.sqlite3
+sample-app/backend/**/*.pdb
+sample-app/backend/**/*.obj/
+sample-app/backend/**/*.bin/
+sample-app/backend/**/*.log
+sample-app/backend/**/*.lock.json
+sample-app/backend/**/*.ncrunch*
+sample-app/backend/**/*.TestResults/
+sample-app/backend/**/*.coverage*
+sample-app/backend/**/*.vspscc
+sample-app/backend/**/*.vssscc
+sample-app/backend/**/*.vsscc
+sample-app/backend/**/*.cache/
+sample-app/backend/**/*.tmp
+sample-app/backend/**/*.bak
+sample-app/backend/**/*.swp
+sample-app/backend/**/*.slnx
+sample-app/backend/RealtimeDemo.Api/realtimedemo.db
+sample-app/backend/RealtimeDemo.Api/vapid.json
+
+# OS/Editor
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*.tmp
+*.bak
+.idea/
+.vscode/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Misc
+.env
+.env.*
+*.local
+
+# Ignore build/test artifacts
+sample-app/backend/RealtimeDemo.Api/bin/
+sample-app/backend/RealtimeDemo.Api/obj/
